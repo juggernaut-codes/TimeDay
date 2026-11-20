@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=TimeDay
+GenericName=Time management
+GenericName[ru]=Управление временем
+GenericName[uk]=Керування часом
+Comment=Tasks, timers and activity statistics
+Comment[ru]=Задачи, таймеры и статистика активности
+Comment[uk]=Завдання, таймери та статистика активності
+Exec=timeday
+Icon=io.github.timeday.TimeDay
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+StartupWMClass=io.github.timeday.TimeDay
