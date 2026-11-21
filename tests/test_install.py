@@ -12,9 +12,33 @@ class InstallTests(unittest.TestCase):
     def setUp(self):
         config = tempfile.TemporaryDirectory()
         self.addCleanup(config.cleanup)
+        desktop = Path(config.name) / 'Desktop'
+        desktop.mkdir()
+        (Path(config.name) / 'user-dirs.dirs').write_text(f'XDG_DESKTOP_DIR="{desktop}"\n')
         environment = patch.dict(os.environ, {"XDG_CONFIG_HOME": config.name})
         environment.start()
         self.addCleanup(environment.stop)
+
+    def test_update_migrates_old_desktop_copy_to_stable_launcher(self):
+        from timeday.desktop import ENTRY_NAME, desktop_directory
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            python = Path(sys.executable)
+            install.install(data, python)
+            shortcut = desktop_directory() / ENTRY_NAME
+            shortcut.write_bytes((data / 'applications' / ENTRY_NAME).read_bytes())
+            shortcut.chmod(0o755)
+            with patch.object(install, 'LAUNCHER', install.LAUNCHER + '# update\n'):
+                install.install(data, python)
+            self.assertIn('/usr/bin/gio launch', shortcut.read_text())
+            self.assertNotIn('/releases/', shortcut.read_text())
+            self.assertEqual(shortcut.stat().st_mode & 0o777, 0o755)
+            stable = shortcut.read_bytes()
+            install.install(data, python)
+            self.assertEqual(shortcut.read_bytes(), stable)
+            shortcut.write_text('custom launcher')
+            install.install(data, python)
+            self.assertEqual(shortcut.read_text(), 'custom launcher')
 
     def test_update_migrates_enabled_autostart_to_background(self):
         from timeday.desktop import ENTRY_NAME, MANAGED, config_home

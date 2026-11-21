@@ -279,6 +279,27 @@ class Store:
                     title = excluded.title, day = excluded.day, start = excluded.start, end = excluded.end, color = excluded.color, marker = excluded.marker
             """, (event_id, original_day.isoformat(), title, day.isoformat() if day else None, start, end, color, marker))
 
+    def move_calendar_item(self, item, day, start, other=None):
+        """Move one occurrence; swapping is atomic and preserves both durations."""
+        with self.db:
+            def write(selected, target_day, target_start):
+                end = target_start + selected.end - selected.start
+                if selected.event.repeat:
+                    self.db.execute("""INSERT INTO calendar_overrides
+                        (event_id, original_day, title, day, start, end, color, marker)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(event_id, original_day) DO UPDATE SET
+                        title=excluded.title, day=excluded.day, start=excluded.start,
+                        end=excluded.end, color=excluded.color, marker=excluded.marker""",
+                        (selected.event.id, selected.original_day.isoformat(), selected.title,
+                         target_day.isoformat(), target_start, end, selected.color, selected.marker))
+                else:
+                    self.db.execute("UPDATE calendar_events SET day=?, start=?, end=? WHERE id=?",
+                                    (target_day.isoformat(), target_start, end, selected.event.id))
+            write(item, day, start)
+            if other is not None:
+                write(other, item.day, item.start)
+
     def delete_event(self, event_id):
         with self.db:
             self.db.execute("DELETE FROM calendar_events WHERE id = ?", (event_id,))

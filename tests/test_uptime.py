@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -17,6 +18,20 @@ HOUR = 3600
 
 
 class UptimeTests(unittest.TestCase):
+    def test_failed_checkpoint_keeps_last_persisted_point(self):
+        store = Store(':memory:')
+        self.addCleanup(store.close)
+        uptime = ComputerUptime(store, 'test')
+        start = local_midnight(DAY)
+        uptime.checkpoint(AwakePoint(start + 100, 100, 100))
+        previous = uptime.previous
+        with patch.object(store, 'save_awake_checkpoint', side_effect=sqlite3.OperationalError('locked')):
+            with self.assertRaises(sqlite3.OperationalError):
+                uptime.checkpoint(AwakePoint(start + 110, 110, 110))
+        self.assertEqual(uptime.previous, previous)
+        uptime.checkpoint(AwakePoint(start + 120, 120, 120))
+        self.assertEqual(uptime.totals([DAY])[DAY], 120)
+
     def test_invalid_checkpoint_is_replaced(self):
         store = Store(":memory:")
         self.addCleanup(store.close)

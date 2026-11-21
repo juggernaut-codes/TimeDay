@@ -437,6 +437,7 @@ class TodayContent(Gtk.Box):
         columns.set_shrink_start_child(False)
         columns.set_shrink_end_child(False)
         self.append(columns)
+
         task_card = box(True, 9, "card")
         task_card.set_size_request(265, -1)
         task_card.set_valign(Gtk.Align.START)

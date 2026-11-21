@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from timeday import APP_ICON, APP_ID
-from timeday.desktop import exec_argument, migrate_autostart, write_atomic
+from timeday.desktop import MANAGED, desktop_directory, exec_argument, migrate_autostart, write_atomic
 
 ROOT = Path(__file__).resolve().parent
 LAUNCHER = "from timeday.cli import main\n\nraise SystemExit(main())\n"
@@ -55,6 +55,26 @@ def build_release(releases):
     return release
 
 
+def migrate_desktop_shortcut(data_home, python, template):
+    shortcut = desktop_directory() / f"{APP_ID}.desktop"
+    if shortcut.is_symlink() or not shortcut.is_file():
+        return
+    original = shortcut.read_bytes()
+    # Only migrate exact copies of launchers produced by this installer.
+    # Custom launchers are left untouched.
+    for release in (data_home / "timeday" / "releases").iterdir():
+        if not (release / "launch.py").is_file():
+            continue
+        invocation = " ".join(exec_argument(path) for path in (python, release / "launch.py"))
+        if original == template.replace("Exec=timeday", f"Exec={invocation}").encode():
+            entry = data_home / "applications" / f"{APP_ID}.desktop"
+            content = ("[Desktop Entry]\nType=Application\nName=TimeDay\n"
+                       f"Exec=/usr/bin/gio launch {exec_argument(entry)}\nIcon={APP_ID}\n"
+                       f"Terminal=false\nStartupNotify=true\n{MANAGED}\n")
+            write_atomic(shortcut, content.encode(), shortcut.stat().st_mode & 0o777)
+            return
+
+
 def install(data_home, python):
     app_data = data_home / "timeday"
     app_data.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -70,6 +90,7 @@ def install(data_home, python):
         write_atomic(data_home / "applications" / entry_name,
                      entry.replace("Exec=timeday", f"Exec={invocation}").encode())
         migrate_autostart(data_home / "applications" / entry_name)
+        migrate_desktop_shortcut(data_home, python, entry)
 
 
 def main():

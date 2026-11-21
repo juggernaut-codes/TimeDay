@@ -1,0 +1,29 @@
+name: Ошибка
+description: Сообщить о проблеме в TimeDay
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия TimeDay
+      description: Посмотрите в настройках или выполните python3 -m timeday --version.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Система и рабочее окружение
+      placeholder: Linux Mint 22.3, Cinnamon, X11
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Как повторить ошибку
+      description: Опишите шаги, ожидаемый результат и то, что произошло.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Снимки экрана и сообщения об ошибке
+      description: Используйте тестовые данные. Не прикладывайте личную базу задач, резервные копии, пароли или токены.

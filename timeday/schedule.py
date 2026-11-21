@@ -259,8 +259,10 @@ class EventEditor(Gtk.Window):
 
 
 class DayColumn(Gtk.Overlay):
-    def __init__(self, new, edit, accent):
+    def __init__(self, new, edit, accent, owner):
         super().__init__(hexpand=True)
+        self.owner = owner
+        self.preview = None
         self.new, self.edit, self.accent = new, edit, accent
         self.day = date.today()
         self.today = False
@@ -276,8 +278,51 @@ class DayColumn(Gtk.Overlay):
         self.add_overlay(self.layer)
         self.set_clip_overlay(self.layer, True)
         self.line = Gtk.DrawingArea(can_target=False)
-        self.line.set_draw_func(self.draw_now)
+        self.line.set_draw_func(self.draw_preview)
+        target = Gtk.DropTarget.new(str, Gdk.DragAction.MOVE)
+        target.connect("accept", lambda *_: self.owner.dragged is not None)
+        target.connect("enter", self.drag_motion)
+        target.connect("motion", self.drag_motion)
+        target.connect("leave", lambda *_: self.clear_preview())
+        target.connect("drop", self.drop_event)
+        self.add_controller(target)
         self.add_overlay(self.line)
+
+    def destination(self, x, y):
+        hit = self.pick(x, y, Gtk.PickFlags.DEFAULT)
+        while hit is not None and hit is not self:
+            item = getattr(hit, "schedule_item", None)
+            if item is not None:
+                return item.day, item.start, item
+            hit = hit.get_parent()
+        minute = min(1425, max(0, round(y * 1440 / max(1, self.grid.get_height()) / 15) * 15))
+        return self.day, minute, None
+
+    def clear_preview(self):
+        self.preview = None
+        self.line.queue_draw()
+        self.line.set_visible(False)
+
+    def drag_motion(self, _target, x, y):
+        item = self.owner.dragged
+        if item is None:
+            return Gdk.DragAction(0)
+        day, minute, other = self.destination(x, y)
+        self.preview = (minute, minute + item.end - item.start)
+        self.line.set_visible(True)
+        self.line.queue_draw()
+        return Gdk.DragAction.MOVE
+
+    def drop_event(self, _target, value, x, y):
+        item = self.owner.dragged
+        if value != "timeday-event" or item is None:
+            return False
+        day, minute, other = self.destination(x, y)
+        self.owner.end_drag()
+        if other == item or (day == item.day and minute == item.start):
+            return False
+        self.owner.move(item, day, minute, other)
+        return True
 
     def add_at(self, _gesture, _count, x, y):
         hit = self.pick(x, y, Gtk.PickFlags.DEFAULT)
@@ -294,7 +339,7 @@ class DayColumn(Gtk.Overlay):
     def show_day(self, day, spans):
         self.day = day
         self.today = day == date.today()
-        self.line.set_visible(self.today)
+        self.line.set_visible(False)
         self.grid.queue_draw()
         clear(self.layer)
         self.blocks = []
@@ -319,6 +364,13 @@ class DayColumn(Gtk.Overlay):
                 emblem.add_css_class("schedule-event-icon")
                 content.append(emblem)
             card.set_child(content)
+            card.schedule_item = item
+            source = Gtk.DragSource(actions=Gdk.DragAction.MOVE)
+            source.set_button(1)
+            source.connect("prepare", lambda *_: Gdk.ContentProvider.new_for_value("timeday-event"))
+            source.connect("drag-begin", lambda src, _drag, selected=item, widget=card: self.owner.begin_drag(selected, src, widget))
+            source.connect("drag-end", lambda *_: self.owner.end_drag())
+            card.add_controller(source)
             tooltip = f"{item.title}\n{date_label(item.day)}, {time_range(item.start, item.end)}"
             set_translated(card, 'set_tooltip_text', tooltip)
             accessible_label(card, tooltip)
@@ -364,23 +416,30 @@ class DayColumn(Gtk.Overlay):
         cr.line_to(.5, height)
         cr.stroke()
 
-    def draw_now(self, _area, cr, width, height):
+    def draw_preview(self, _area, cr, width, height):
         color = Gdk.RGBA()
         color.parse(self.accent())
-        now = datetime.now()
-        y = (now.hour * 60 + now.minute + now.second / 60) * height / 1440
-        cr.set_source_rgba(color.red, color.green, color.blue, .9)
-        cr.set_line_width(1.5)
-        cr.move_to(0, y)
-        cr.line_to(width, y)
-        cr.stroke()
-        cr.arc(4, y, 3.5, 0, 6.29)
-        cr.fill()
+        if self.preview is not None:
+            start, end = self.preview
+            top = start * height / 1440
+            bottom = min(1440, end) * height / 1440
+            cr.set_source_rgba(color.red, color.green, color.blue, .28)
+            cr.rectangle(2, top, max(1, width - 4), max(4, bottom - top))
+            cr.fill_preserve()
+            cr.set_source_rgba(color.red, color.green, color.blue, 1)
+            cr.set_line_width(2)
+            cr.stroke()
+            cr.set_font_size(12)
+            cr.move_to(7, max(14, min(height - 4, top + 15)))
+            cr.show_text(str(time_range(start, end)))
 
 
 class WeekView(Gtk.Box):
-    def __init__(self, new, edit, accent):
+    def __init__(self, new, edit, accent, move):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
+        self.move = move
+        self.dragged = None
+        self.drag_widget = None
         self.accent = accent
         self.week = week_start(date.today())
         self.today = date.today()
@@ -421,10 +480,24 @@ class WeekView(Gtk.Box):
         columns = box()
         columns.set_hexpand(True)
         columns.set_homogeneous(True)
-        self.days = [DayColumn(new, edit, accent) for _ in SHORT_DAYS]
+        self.days = [DayColumn(new, edit, accent, self) for _ in SHORT_DAYS]
         for day in self.days:
             columns.append(day)
         body.append(columns)
+
+    def begin_drag(self, item, source, card):
+        self.dragged = item
+        self.drag_widget = card
+        source.set_icon(Gtk.WidgetPaintable.new(card), 0, 0)
+        card.add_css_class("event-dragging")
+
+    def end_drag(self):
+        self.dragged = None
+        if self.drag_widget is not None:
+            self.drag_widget.remove_css_class("event-dragging")
+        self.drag_widget = None
+        for column in self.days:
+            column.clear_preview()
 
     def show_week(self, week, items):
         self.week = week
@@ -555,9 +628,13 @@ class ScheduleView(Gtk.Box):
         self.rows = box(True, 3)
         self.agenda_panel.append(self.rows)
 
-        self.week_grid = WeekView(new, edit, accent)
+        self.week_grid = WeekView(new, edit, accent, self.move_event)
         self.views.add_named(self.week_grid, "week")
         self.views.set_visible_child_name("day")
+        self.refresh()
+
+    def move_event(self, item, day, minute, other=None):
+        self.store.move_calendar_item(item, day, minute, other)
         self.refresh()
 
     def shift(self, offset):

@@ -118,7 +118,10 @@ def occurrences(events, overrides, first, last):
     for item in overrides:
         event = by_id.get(item.event_id)
         if item.day is not None and first <= item.day <= last and event and event.occurs(item.original_day):
-            result.append(Occurrence(event, item.original_day, item.title, item.day, item.start, item.end,
+            result.append(Occurrence(event, item.original_day,
+                                     event.title if item.title is None else item.title, item.day,
+                                     event.start if item.start is None else item.start,
+                                     event.end if item.end is None else item.end,
                                      event.color if item.color is None else item.color,
                                      event.marker if item.marker is None else item.marker))
     return sorted(result, key=lambda item: (item.day, item.start, item.end, item.event.id, item.original_day))
@@ -148,7 +151,10 @@ def next_occurrence(events, overrides, now):
     for item in overrides:
         event = by_id.get(item.event_id)
         if item.day is not None and event and event.occurs(item.original_day):
-            candidate = Occurrence(event, item.original_day, item.title, item.day, item.start, item.end,
+            candidate = Occurrence(event, item.original_day,
+                                     event.title if item.title is None else item.title, item.day,
+                                     event.start if item.start is None else item.start,
+                                     event.end if item.end is None else item.end,
                                    event.color if item.color is None else item.color,
                                    event.marker if item.marker is None else item.marker)
             if candidate.starts_at >= now:

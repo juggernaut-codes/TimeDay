@@ -222,3 +222,5 @@ paned > separator:hover { background: #171719; }
 .pc-idle-legend { color: #e8a357; font-size: 11px; }
 
 .pc-active-legend { color: #76d7a0; font-size: 11px; }
+
+.event-dragging { opacity: 0.45; }

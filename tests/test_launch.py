@@ -1,13 +1,29 @@
+import sqlite3
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from gi.repository import GLib
 
-from timeday.app import TimeDay
+from timeday.app import TimeDay, TimeDayWindow
 
 
 class LaunchTests(unittest.TestCase):
+    def test_checkpoint_retries_after_database_error_and_saves_other_recorder(self):
+        window = SimpleNamespace(uptime=Mock(), timers=Mock(), get_mapped=lambda: False)
+        window.uptime.checkpoint.side_effect = [sqlite3.OperationalError('locked'), None]
+        with self.assertLogs(level='ERROR'):
+            self.assertTrue(TimeDayWindow.checkpoint(window))
+        self.assertTrue(TimeDayWindow.checkpoint(window))
+        self.assertEqual(window.uptime.checkpoint.call_count, 2)
+        self.assertEqual(window.timers.checkpoint.call_count, 2)
+
+    def test_checkpoint_keeps_timeout_after_statistics_read_error(self):
+        window = SimpleNamespace(uptime=Mock(), timers=Mock(), get_mapped=lambda: True,
+                                 refresh_pc_display=Mock(side_effect=sqlite3.OperationalError('locked')))
+        with self.assertLogs(level='ERROR'):
+            self.assertTrue(TimeDayWindow.checkpoint(window))
+
     def command(self, background):
         options = GLib.VariantDict.new(None)
         if background:

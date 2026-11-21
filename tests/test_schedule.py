@@ -14,6 +14,17 @@ MONDAY = date(2026, 11, 16)
 
 
 class ScheduleTests(unittest.TestCase):
+    def test_partial_occurrence_edit_inherits_series_fields(self):
+        store = Store(':memory:')
+        self.addCleanup(store.close)
+        event_id = store.save_event('Training', MONDAY, 540, 600, DAILY)
+        store.save_occurrence(event_id, MONDAY, day=MONDAY, color=2)
+        items = occurrences(*store.calendar(), MONDAY, MONDAY)
+        self.assertEqual([(i.title, i.start, i.end, i.color) for i in items],
+                         [('Training', 540, 600, 2)])
+        upcoming = next_occurrence(*store.calendar(), datetime(2026, 11, 16, 8))
+        self.assertEqual((upcoming.title, upcoming.start, upcoming.end), ('Training', 540, 600))
+
     def test_appearance_persists_for_series_and_single_occurrence(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "calendar.sqlite3"

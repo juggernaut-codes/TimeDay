@@ -64,7 +64,8 @@ def localized_widget(factory, *args, **properties):
 
 
 def accessible_label(widget, value):
-    widget.update_property([Gtk.AccessibleProperty.LABEL], [value])
+    widget.update_property([Gtk.AccessibleProperty.LABEL],
+                           [GObject.Value(GObject.TYPE_STRING, str(value))])
     remember_text(widget, ("accessible", "label"), value)
 
 
@@ -118,7 +119,8 @@ def refresh_translations():
             elif kind == "property":
                 widget.set_property(key, value)
             else:
-                widget.update_property([Gtk.AccessibleProperty.LABEL], [value])
+                widget.update_property([Gtk.AccessibleProperty.LABEL],
+                                       [GObject.Value(GObject.TYPE_STRING, str(value))])
         if hasattr(widget, "_translated_options"):
             for index, original in enumerate(widget._translated_options):
                 widget.get_model().get_item(index).text = str(tr(original))

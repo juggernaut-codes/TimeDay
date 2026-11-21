@@ -55,7 +55,7 @@ def live_interval(previous, current):
 
 def merge_intervals(spans):
     merged = []
-    for start, end in sorted(spans):
+    for start, end in sorted((start, end) for start, end in spans):
         if end <= start:
             continue
         if merged and merged[-1][1] >= start:
@@ -209,13 +209,12 @@ class ComputerUptime:
 
     def checkpoint(self, point=None):
         point = point or AwakePoint.now()
-        if self.previous is None:
-            self.previous = AwakePoint(point.wall - point.boot, 0, 0)
-        interval = live_interval(self.previous, point)
-        self.previous = point
+        previous = self.previous or AwakePoint(point.wall - point.boot, 0, 0)
+        interval = live_interval(previous, point)
         self.store.save_awake_checkpoint(self.boot_id, interval, json.dumps({
             "boot_id": self.boot_id, "point": asdict(point),
         }))
+        self.previous = point
 
     def idle_totals(self, days):
         from .presence import daily_idle

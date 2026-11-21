@@ -1077,10 +1077,17 @@ class TimeDayWindow(Gtk.ApplicationWindow):
         return False
 
     def checkpoint(self):
-        self.uptime.checkpoint()
-        self.timers.checkpoint()
+        for recorder in (self.uptime, self.timers):
+            try:
+                recorder.checkpoint()
+            except sqlite3.Error:
+                # Returning True keeps the GLib timeout alive for the next attempt.
+                logging.exception("TimeDay checkpoint failed")
         if self.get_mapped():
-            self.refresh_pc_display()
+            try:
+                self.refresh_pc_display()
+            except sqlite3.Error:
+                logging.exception("TimeDay PC statistics refresh failed")
         return True
 
     def refresh_pc_display(self):

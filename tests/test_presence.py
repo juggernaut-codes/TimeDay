@@ -8,7 +8,7 @@ from timeday.activity import ActivityRecorder, Sample
 from timeday.app_icons import AppIcons
 from timeday.presence import PresenceRecorder, daily_idle
 from timeday.store import Store
-from timeday.uptime import local_midnight
+from timeday.uptime import ComputerUptime, local_midnight
 
 
 class PresenceTests(unittest.TestCase):
@@ -50,6 +50,15 @@ class PresenceTests(unittest.TestCase):
         result = daily_idle([(midnight - 60, midnight + 60), (midnight, midnight + 120)],
                             [day - timedelta(days=1), day])
         self.assertEqual(list(result.values()), [60, 120])
+
+    def test_idle_totals_accept_multiple_database_rows(self):
+        day = date(2026, 11, 19)
+        midnight = local_midnight(day)
+        self.store.record_idle(midnight - 60, midnight + 60)
+        self.store.record_idle(midnight + 120, midnight + 180)
+        self.assertEqual(ComputerUptime(self.store, 'test').idle_totals(
+            [day - timedelta(days=1), day]),
+            {day - timedelta(days=1): 60, day: 120})
 
     def test_idle_persists_after_restart(self):
         with tempfile.TemporaryDirectory() as folder:

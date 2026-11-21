@@ -1,0 +1,17 @@
+name: Предложение
+description: Предложить улучшение TimeDay
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу нужно решить?
+      description: Опишите ситуацию, в которой вам не хватает возможности.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Как это должно работать?
+      description: Можно приложить пример или набросок интерфейса.
+    validations:
+      required: true
